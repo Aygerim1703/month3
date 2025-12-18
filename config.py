@@ -1,0 +1,1 @@
+path_db = "greetings.db"

@@ -1,45 +1,75 @@
 import flet as ft
 from datetime import datetime
+from database import init_db, add_name, get_history, delete_last, delete_all
 
 def main(page: ft.Page):
-    page.title = "Приветствие по времени суток"
+    page.title = "Приветствия с историей"
     page.theme_mode = ft.ThemeMode.LIGHT
 
-    name_input = ft.TextField(label="Введите ваше имя", width=320)
-    greeting_text = ft.Text("", size=20)
+    # Инициализация базы данных
+    init_db()
 
-    def show_greeting(e):
+    name_input = ft.TextField(label="Введите ваше имя", width=300)
+    greeting_text = ft.Column()  # Для отображения истории
+
+    def update_history():
+        """Обновление колонки с историей приветствий"""
+        greeting_text.controls.clear()
+        history = get_history()
+        for idx, (id, name, created_at) in enumerate(history):
+            if idx == len(history) - 1:  # последнее имя подсвечено
+                text_control = ft.Text(
+                    spans=[
+                        ft.TextSpan(text=f"{created_at} Привет ",
+                                    style=ft.TextStyle(color=ft.Colors.BLACK)),
+                        ft.TextSpan(text=name,
+                                    style=ft.TextStyle(color=ft.Colors.BLUE, weight="bold"))
+                    ]
+                )
+            else:
+                text_control = ft.Text(f"{created_at} Привет {name}")
+            greeting_text.controls.append(text_control)
+        page.update()
+
+    def greet(e):
         name = name_input.value.strip() or "Гость"
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        add_name(name, created_at)
+        name_input.value = ""
+        update_history()
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    def delete_last_greeting(e):
+        history = get_history()
+        if not history:
+            page.dialog = ft.AlertDialog(title=ft.Text("История пуста!"))
+            page.dialog.open = True
+            page.update()
+            return
+        delete_last()
+        update_history()
 
-        greeting_text.value = f"{now} Привет {name}"
-        page.update()
+    def sort_history(e):
+        history = get_history()
+        sorted_history = sorted(history, key=lambda x: x[1].lower())
+        delete_all()
+        for id, name, created_at in sorted_history:
+            add_name(name, created_at)
+        update_history()
 
-    theme_button = ft.IconButton(
-        content=ft.Icon(name="brightness_7"),
-        tooltip="Сменить тему"
-    )
-
-    def toggle_theme(e):
-        if page.theme_mode == ft.ThemeMode.LIGHT:
-            page.theme_mode = ft.ThemeMode.DARK
-            theme_button.content = ft.Icon(name="brightness_2")
-        else:
-            page.theme_mode = ft.ThemeMode.LIGHT
-            theme_button.content = ft.Icon(name="brightness_7")
-        page.update()
-
-    theme_button.on_click = toggle_theme
-
-    greet_button = ft.ElevatedButton("Поздороваться", on_click=show_greeting)
+    # Кнопки
+    greet_button = ft.ElevatedButton("Поздороваться", on_click=greet)
+    delete_button = ft.ElevatedButton("Удалить последнее", on_click=delete_last_greeting,
+                                      bgcolor=ft.Colors.RED)
+    sort_button = ft.ElevatedButton("Сортировать по алфавиту", on_click=sort_history)
 
     page.add(
-        ft.Row([theme_button], alignment=ft.MainAxisAlignment.END),
         name_input,
-        ft.Row([greet_button], alignment=ft.MainAxisAlignment.CENTER),
+        ft.Row([greet_button, delete_button, sort_button],
+               alignment=ft.MainAxisAlignment.CENTER, spacing=10),
         ft.Divider(),
-        greeting_text,
+        greeting_text
     )
+
+    update_history()
 
 ft.app(target=main)
